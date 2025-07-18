@@ -150,7 +150,7 @@ with tab1:
     with col1:
         uploaded_file = st.file_uploader("1. Selecciona un archivo Excel de Wialon", type=["xlsx"], key="wialon_uploader")
     with col2:
-        mega_gasolineras_file_tab1 = st.file_uploader("2. Selecciona el archivo de Mega Gasolineras", type=["xlsx"], key="mega_uploader_tab1")
+        mega_gasolineras_file_tab1 = st.file_uploader("2. Selecciona el archivo de Mega Gasolineras", type=["xls", "xlsx"], key="mega_uploader_tab1")
 
     if uploaded_file is None or mega_gasolineras_file_tab1 is None:
         st.info("Por favor, carga ambos archivos para comenzar el análisis.")
