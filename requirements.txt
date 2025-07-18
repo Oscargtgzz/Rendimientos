@@ -3,3 +3,4 @@ pandas
 openpyxl
 xlrd
 matplotlib
+google.generativeai
