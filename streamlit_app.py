@@ -305,8 +305,8 @@ def call_gemini_api(api_key, prompt):
 # ════════════════════════════════════════════
 st.title("📊 Dashboard de Inteligencia de Flota")
 
-tab1, tab2, tab3 = st.tabs(
-    ["Dashboard Wialon", "Cruce de Combustible", "Análisis con IA (Gemini)"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Dashboard Wialon", "Cruce de Combustible", "Análisis con IA (Gemini)", "Viajes Fin de Semana"]
 )
 
 # ────────────────────────────────────────────
@@ -509,7 +509,7 @@ with tab3:
             with st.spinner("La IA está analizando los datos de la flota... 🧠"):
                 kpi_md = st.session_state["kpi_data"].to_markdown()
 
-                prompt = f"""
+                prompt = f'''
 Eres un analista experto en gestión de flotas y logística. Tu misión es proporcionar insights de alto valor para la toma de decisiones, analizando los datos a nivel micro (unidad por unidad) y macro (flota completa).
 
 **Tabla de Datos de Rendimiento (Dashboard Wialon):**
@@ -535,7 +535,7 @@ Basado en los análisis micro y macro, propón:
 - **Recomendaciones accionables y priorizadas** para la gerencia. Sugiere pasos concretos para mejorar la eficiencia de las unidades con bajo rendimiento y para replicar el éxito de las mejores.
 
 Utiliza un lenguaje claro y directo, enfocado en generar valor para el cliente. Organiza tu respuesta con los encabezados numerados exactamente como se indica.
-"""
+'''
 
                 respuesta_ia = call_gemini_api(api_key, prompt)
 
@@ -546,3 +546,77 @@ Utiliza un lenguaje claro y directo, enfocado en generar valor para el cliente. 
                 st.error(
                     "No se pudo obtener una respuesta de la IA. Verifica tu API key y la conexión."
                 )
+
+# ────────────────────────────────────────────
+#   TAB 4 • VIAJES FIN DE SEMANA
+# ────────────────────────────────────────────
+with tab4:
+    st.header("📆 Viajes Fin de Semana")
+    st.markdown(
+        "Kilometraje recorrido y costo asociado **solo** los sábados y domingos  \n        (basado en el *Costo por Km* calculado en el Dashboard)."
+    )
+
+    # --- Verifica que los datos base ya existan ---
+    if uploaded_file and mega_gasolineras_file_tab1 and "kpi_data" in st.session_state:
+
+        # Si el usuario ya aplicó filtros en el Dashboard, reutilízalos;
+        # de lo contrario, trabaja con todo el DataFrame.
+        try:
+            df_viajes_filtrado = df_viajes[mask_viajes].copy()        # ← definido en el Dashboard
+        except NameError:
+            df_viajes_filtrado = df_viajes.copy()
+
+        # 1️⃣ Filtra únicamente sábado (5) y domingo (6)
+        df_weekend = df_viajes_filtrado[
+            df_viajes_filtrado["Comienzo"].dt.dayofweek.isin([5, 6])
+        ].copy()
+
+        if df_weekend.empty:
+            st.info("No hay viajes registrados en fin de semana para el rango seleccionado.")
+        else:
+            # 2️⃣ Crea etiqueta de semana (inicio de semana = lunes)
+            df_weekend["Semana"] = df_weekend["Comienzo"].dt.to_period("W").apply(
+                lambda r: r.start_time.date()
+            )
+
+            # 3️⃣ Agrupa km por Unidad y Semana
+            resumen_km = (
+                df_weekend.groupby(["Semana", "Agrupación"])["Kilometraje"]
+                .sum()
+                .reset_index()
+                .rename(columns={"Kilometraje": "Km Fin de Semana"})
+            )
+
+            # 4️⃣ Anexa el Costo por Km que ya calculó el Dashboard
+            costo_por_km = st.session_state["kpi_data"].reset_index()[  # «kpi_data» ya contiene la columna
+                ["Unidad", "Costo por Km ($/km)"]
+            ].rename(columns={"Unidad": "Agrupación"})
+
+            resumen = resumen_km.merge(costo_por_km, on="Agrupación", how="left")
+
+            # 5️⃣ Calcula el costo total del fin de semana
+            resumen["Costo Fin de Semana ($)"] = (
+                resumen["Km Fin de Semana"] * resumen["Costo por Km ($/km)"]
+            )
+
+            # 6️⃣ Muestra los resultados
+            st.subheader("Detalle por Semana y Unidad")
+            st.dataframe(
+                resumen.style.format(
+                    {
+                        "Km Fin de Semana": "{:,.0f} km",
+                        "Costo por Km ($/km)": "${:,.2f}",
+                        "Costo Fin de Semana ($)": "${:,.2f}",
+                    }
+                )
+            )
+
+            # 7️⃣ Métricas totales
+            total_km = resumen["Km Fin de Semana"].sum()
+            total_cost = resumen["Costo Fin de Semana ($)"].sum()
+            c1, c2 = st.columns(2)
+            c1.metric("Total Km Fin de Semana", f"{total_km:,.0f} km")
+            c2.metric("Costo Total Fin de Semana", f"${total_cost:,.2f}")
+
+    else:
+        st.info("Primero carga y procesa los archivos en la pestaña **Dashboard Wialon**.") 
